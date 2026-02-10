@@ -29,15 +29,15 @@ header h1 {
 }
 
 main {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 30px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
   justify-content: center;
 }
 
-@media (min-width: 768px) {
+@media (max-width: 1024px) {
   main {
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: 1fr;
   }
 }
 
@@ -47,7 +47,7 @@ section {
   border-radius: 5px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   width: 100%;
-  max-width: 500px;
+  max-width: none;
 }
 
 section h3 {
@@ -63,11 +63,52 @@ section h3 {
   border: 1px solid #ddd;
   border-radius: 5px;
   background-color: #f9f9f9;
+  transition: all 0.3s ease;
+}
+
+.activity-card.activity-full {
+  background-color: #ffebee;
+  border-color: #ef5350;
+  opacity: 0.85;
 }
 
 .activity-card h4 {
   margin-bottom: 10px;
   color: #0066cc;
+}
+
+.activity-full h4 {
+  color: #c62828;
+}
+
+.availability-full {
+  margin-bottom: 8px;
+}
+
+.availability-low {
+  margin-bottom: 8px;
+}
+
+.full-badge {
+  display: inline-block;
+  background-color: #d32f2f;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 13px;
+  margin-left: 5px;
+}
+
+.low-badge {
+  display: inline-block;
+  background-color: #f57c00;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 13px;
+  margin-left: 5px;
 }
 
 .activity-card p {
@@ -194,6 +235,48 @@ button:hover {
 
 .hidden {
   display: none;
+}
+
+#my-activities-list {
+  margin-top: 20px;
+}
+
+.activities-count {
+  color: #1a237e;
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+.no-activities {
+  color: #999;
+  font-style: italic;
+  padding: 15px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.my-activities-grid {
+  display: grid;
+  gap: 15px;
+}
+
+.my-activity-card {
+  padding: 15px;
+  background-color: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  border-radius: 5px;
+  border-left: 4px solid #2e7d32;
+}
+
+.my-activity-card h4 {
+  color: #1b5e20;
+  margin-bottom: 10px;
+}
+
+.my-activity-card p {
+  margin-bottom: 8px;
+  color: #333;
 }
 
 footer {

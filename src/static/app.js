@@ -92,21 +92,51 @@ document.addEventListener("DOMContentLoaded", () => {
           `;
         }
 
+        // Build availability section with visual indicator
+        let availabilitySection = '';
+        if (spotsLeft === 0) {
+          availabilitySection = `
+            <p class="availability-full">
+              <strong>Availability:</strong> 
+              <span class="full-badge">🔴 FULL - No spots available</span>
+            </p>
+          `;
+        } else if (spotsLeft === 1) {
+          availabilitySection = `
+            <p class="availability-low">
+              <strong>Availability:</strong> 
+              <span class="low-badge">⚠️ Only 1 spot left!</span>
+            </p>
+          `;
+        } else {
+          availabilitySection = `
+            <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          `;
+        }
+
         activityCard.innerHTML = `
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
-          <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          ${availabilitySection}
           ${participantsList}
         `;
 
+        // Add visual class if activity is full
+        if (spotsLeft === 0) {
+          activityCard.classList.add('activity-full');
+        }
+
         activitiesList.appendChild(activityCard);
 
-        // Add option to select dropdown
-        const option = document.createElement("option");
-        option.value = name;
-        option.textContent = name;
-        activitySelect.appendChild(option);
+        // Add option to select dropdown only if spots are available
+        const spotsAvailable = details.max_participants - details.participants.length;
+        if (spotsAvailable > 0) {
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = name;
+          activitySelect.appendChild(option);
+        }
       });
 
       // Add event listeners for delete buttons
@@ -159,6 +189,55 @@ document.addEventListener("DOMContentLoaded", () => {
       messageDiv.className = "error";
       messageDiv.classList.remove("hidden");
       console.error("Error signing up:", error);
+    }
+  });
+
+  // Handle check my activities form submission
+  const checkActivitiesForm = document.getElementById("check-activities-form");
+  checkActivitiesForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const email = document.getElementById("check-email").value;
+    const myActivitiesList = document.getElementById("my-activities-list");
+
+    try {
+      const response = await fetch(
+        `/my-activities?email=${encodeURIComponent(email)}`
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        const activityCount = Object.keys(result).length;
+        
+        if (activityCount === 0) {
+          myActivitiesList.innerHTML = `
+            <p class="no-activities">You are not registered for any activities yet.</p>
+          `;
+        } else {
+          myActivitiesList.innerHTML = `
+            <p class="activities-count">You are registered for ${activityCount} ${activityCount === 1 ? 'activity' : 'activities'}:</p>
+            <div class="my-activities-grid">
+              ${Object.entries(result).map(([name, details]) => `
+                <div class="my-activity-card">
+                  <h4>${name}</h4>
+                  <p>${details.description}</p>
+                  <p><strong>Schedule:</strong> ${details.schedule}</p>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+        
+        myActivitiesList.classList.remove("hidden");
+      } else {
+        myActivitiesList.innerHTML = `<p class="error">Error: ${result.detail || "Failed to load activities"}</p>`;
+        myActivitiesList.classList.remove("hidden");
+      }
+    } catch (error) {
+      myActivitiesList.innerHTML = `<p class="error">Failed to load your activities. Please try again.</p>`;
+      myActivitiesList.classList.remove("hidden");
+      console.error("Error fetching my activities:", error);
     }
   });
 

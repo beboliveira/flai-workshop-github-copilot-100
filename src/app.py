@@ -74,6 +74,12 @@ activities = {
         "schedule": "Thursdays, 3:30 PM - 5:00 PM",
         "max_participants": 22,
         "participants": ["zoe@mergington.edu", "ethan@mergington.edu"]
+    },
+    "Robotics Workshop": {
+        "description": "Build and program robots with cutting-edge technology",
+        "schedule": "Saturdays, 10:00 AM - 12:00 PM",
+        "max_participants": 5,
+        "participants": ["alice@mergington.edu", "bob@mergington.edu", "charlie@mergington.edu", "diana@mergington.edu"]
     }
 }
 
@@ -86,6 +92,20 @@ def root():
 @app.get("/activities")
 def get_activities():
     return activities
+
+
+@app.get("/my-activities")
+def get_my_activities(email: str):
+    """Get all activities a student is registered for"""
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    
+    my_activities = {}
+    for activity_name, details in activities.items():
+        if email in details["participants"]:
+            my_activities[activity_name] = details
+    
+    return my_activities
 
 
 @app.post("/activities/{activity_name}/signup")

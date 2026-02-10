@@ -197,6 +197,69 @@ class TestSignupEndpoint:
         assert "coder@mergington.edu" in activities_data["Programming Class"]["participants"]
 
 
+class TestMyActivitiesEndpoint:
+    """Test the GET /my-activities endpoint"""
+    
+    def test_get_my_activities_with_registrations(self, client):
+        """Test getting activities for a student with registrations"""
+        email = "michael@mergington.edu"  # Already registered for Chess Club
+        
+        response = client.get(f"/my-activities?email={email}")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "Chess Club" in data
+        assert email in data["Chess Club"]["participants"]
+    
+    def test_get_my_activities_empty(self, client):
+        """Test getting activities for a student with no registrations"""
+        email = "noactivities@mergington.edu"
+        
+        response = client.get(f"/my-activities?email={email}")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert isinstance(data, dict)
+        assert len(data) == 0
+    
+    def test_get_my_activities_multiple(self, client):
+        """Test getting multiple activities for one student"""
+        email = "multisport@mergington.edu"
+        
+        # Sign up for multiple activities
+        client.post(f"/activities/Chess Club/signup?email={email}")
+        client.post(f"/activities/Drama Club/signup?email={email}")
+        client.post(f"/activities/Science Club/signup?email={email}")
+        
+        response = client.get(f"/my-activities?email={email}")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert len(data) == 3
+        assert "Chess Club" in data
+        assert "Drama Club" in data
+        assert "Science Club" in data
+    
+    def test_get_my_activities_no_email(self, client):
+        """Test getting activities without providing email"""
+        response = client.get("/my-activities")
+        assert response.status_code == 422  # Validation error
+    
+    def test_get_my_activities_after_removal(self, client):
+        """Test getting activities after being removed from one"""
+        email = "michael@mergington.edu"  # Already in Chess Club
+        
+        # Remove from Chess Club
+        client.delete(f"/activities/Chess Club/participants/{email}")
+        
+        response = client.get(f"/my-activities?email={email}")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert "Chess Club" not in data
+
+
 class TestRemoveParticipantEndpoint:
     """Test the DELETE /activities/{activity_name}/participants/{email} endpoint"""
     
