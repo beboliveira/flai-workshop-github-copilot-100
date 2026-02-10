@@ -77,6 +77,12 @@ def reset_activities():
             "schedule": "Thursdays, 3:30 PM - 5:00 PM",
             "max_participants": 22,
             "participants": ["zoe@mergington.edu", "ethan@mergington.edu"]
+        },
+        "Robotics Workshop": {
+            "description": "Build and program robots with cutting-edge technology",
+            "schedule": "Saturdays, 10:00 AM - 12:00 PM",
+            "max_participants": 5,
+            "participants": ["alice@mergington.edu", "bob@mergington.edu", "charlie@mergington.edu", "diana@mergington.edu"]
         }
     }
     
@@ -106,9 +112,10 @@ class TestActivitiesEndpoint:
         
         data = response.json()
         assert isinstance(data, dict)
-        assert len(data) == 9
+        assert len(data) == 10  # Updated to include Robotics Workshop
         assert "Chess Club" in data
         assert "Programming Class" in data
+        assert "Robotics Workshop" in data
     
     def test_get_activities_structure(self, client):
         """Test that each activity has correct structure"""
@@ -358,3 +365,298 @@ class TestIntegration:
         final_data = final_response.json()
         assert len(final_data[activity]["participants"]) == initial_count
         assert email not in final_data[activity]["participants"]
+
+
+class TestCapacityLimits:
+    """Test activity capacity and full status"""
+    
+    def test_robotics_workshop_near_capacity(self, client):
+        """Test Robotics Workshop with only 1 spot left"""
+        response = client.get("/activities")
+        data = response.json()
+        
+        robotics = data["Robotics Workshop"]
+        assert robotics["max_participants"] == 5
+        assert len(robotics["participants"]) == 4
+        # One spot left
+        assert robotics["max_participants"] - len(robotics["participants"]) == 1
+    
+    def test_signup_fills_last_spot(self, client):
+        """Test signing up for the last available spot"""
+        email = "laststudent@mergington.edu"
+        
+        # Sign up for last spot in Robotics Workshop
+        response = client.post(f"/activities/Robotics Workshop/signup?email={email}")
+        assert response.status_code == 200
+        
+        # Verify activity is now full
+        activities_response = client.get("/activities")
+        activities_data = activities_response.json()
+        robotics = activities_data["Robotics Workshop"]
+        assert len(robotics["participants"]) == robotics["max_participants"]
+        assert email in robotics["participants"]
+    
+    def test_signup_when_activity_full(self, client):
+        """Test that signup fails when activity is at capacity"""
+        # Fill the last spot
+        response1 = client.post("/activities/Robotics Workshop/signup?email=laststudent@mergington.edu")
+        assert response1.status_code == 200
+        
+        # Verify activity is now full
+        activities_data = client.get("/activities").json()
+        robotics = activities_data["Robotics Workshop"]
+        assert len(robotics["participants"]) == robotics["max_participants"]
+        
+        # Try to sign up when full - should fail
+        response2 = client.post("/activities/Robotics Workshop/signup?email=toolate@mergington.edu")
+        assert response2.status_code == 400
+        assert "full" in response2.json()["detail"].lower()
+        
+        # Verify participant was not added
+        activities_data = client.get("/activities").json()
+        robotics = activities_data["Robotics Workshop"]
+        assert "toolate@mergington.edu" not in robotics["participants"]
+        assert len(robotics["participants"]) == robotics["max_participants"]
+    
+    def test_capacity_tracking_across_operations(self, client):
+        """Test that capacity is correctly tracked through signup and removal"""
+        email1 = "student1@mergington.edu"
+        email2 = "student2@mergington.edu"
+        
+        # Fill last spot
+        client.post(f"/activities/Robotics Workshop/signup?email={email1}")
+        
+        # Verify full
+        response = client.get("/activities")
+        data = response.json()
+        assert len(data["Robotics Workshop"]["participants"]) == 5
+        
+        # Remove one participant
+        client.delete(f"/activities/Robotics Workshop/participants/{email1}")
+        
+        # Verify spot opened
+        response = client.get("/activities")
+        data = response.json()
+        assert len(data["Robotics Workshop"]["participants"]) == 4
+        
+        # Someone else can now sign up
+        response = client.post(f"/activities/Robotics Workshop/signup?email={email2}")
+        assert response.status_code == 200
+
+
+class TestMyActivitiesAdvanced:
+    """Advanced tests for /my-activities endpoint"""
+    
+    def test_my_activities_with_full_activity(self, client):
+        """Test my-activities shows activities even when full"""
+        email = "alice@mergington.edu"  # Already in Robotics Workshop
+        
+        response = client.get(f"/my-activities?email={email}")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert "Robotics Workshop" in data
+        assert email in data["Robotics Workshop"]["participants"]
+    
+    def test_my_activities_after_signup_and_removal_cycle(self, client):
+        """Test my-activities correctly updates through signup and removal"""
+        email = "cycletest@mergington.edu"
+        
+        # Initially no activities
+        response = client.get(f"/my-activities?email={email}")
+        assert len(response.json()) == 0
+        
+        # Sign up for multiple activities
+        client.post(f"/activities/Chess Club/signup?email={email}")
+        client.post(f"/activities/Drama Club/signup?email={email}")
+        
+        # Should show 2 activities
+        response = client.get(f"/my-activities?email={email}")
+        data = response.json()
+        assert len(data) == 2
+        assert "Chess Club" in data
+        assert "Drama Club" in data
+        
+        # Remove from one
+        client.delete(f"/activities/Chess Club/participants/{email}")
+        
+        # Should show only 1 activity
+        response = client.get(f"/my-activities?email={email}")
+        data = response.json()
+        assert len(data) == 1
+        assert "Drama Club" in data
+        assert "Chess Club" not in data
+    
+    def test_my_activities_special_characters_in_email(self, client):
+        """Test my-activities with special characters in email"""
+        email = "student+test@mergington.edu"
+        
+        # Sign up
+        client.post(f"/activities/Chess Club/signup?email={email}")
+        
+        # Check my activities
+        response = client.get(f"/my-activities?email={email}")
+        assert response.status_code == 200
+        data = response.json()
+        assert "Chess Club" in data
+    
+    def test_my_activities_with_all_activities(self, client):
+        """Test student registered for all activities"""
+        email = "superactive@mergington.edu"
+        
+        # Get all activities
+        all_activities = client.get("/activities").json()
+        
+        # Sign up for all non-full activities
+        for activity_name, details in all_activities.items():
+            if len(details["participants"]) < details["max_participants"]:
+                client.post(f"/activities/{activity_name}/signup?email={email}")
+        
+        # Check my activities
+        response = client.get(f"/my-activities?email={email}")
+        data = response.json()
+        
+        # Should have signed up for multiple activities
+        assert len(data) >= 5
+        
+        # All returned activities should have the email
+        for activity_name, details in data.items():
+            assert email in details["participants"]
+
+
+class TestEdgeCases:
+    """Test edge cases and boundary conditions"""
+    
+    def test_signup_with_empty_email(self, client):
+        """Test signup with empty email parameter"""
+        response = client.post("/activities/Chess Club/signup?email=")
+        # Should either return 400 or 422 for validation error
+        assert response.status_code in [400, 422]
+    
+    def test_remove_participant_twice(self, client):
+        """Test removing the same participant twice"""
+        email = "michael@mergington.edu"
+        
+        # Remove once
+        response1 = client.delete(f"/activities/Chess Club/participants/{email}")
+        assert response1.status_code == 200
+        
+        # Try to remove again
+        response2 = client.delete(f"/activities/Chess Club/participants/{email}")
+        assert response2.status_code == 404
+    
+    def test_activity_name_case_sensitivity(self, client):
+        """Test that activity names are case-sensitive"""
+        response = client.post("/activities/chess club/signup?email=test@mergington.edu")
+        assert response.status_code == 404
+    
+    def test_concurrent_signups_different_activities(self, client):
+        """Test signing up for different activities in sequence"""
+        email = "concurrent@mergington.edu"
+        
+        # Sign up for multiple activities
+        response1 = client.post(f"/activities/Chess Club/signup?email={email}")
+        response2 = client.post(f"/activities/Drama Club/signup?email={email}")
+        response3 = client.post(f"/activities/Tennis Club/signup?email={email}")
+        
+        assert response1.status_code == 200
+        assert response2.status_code == 200
+        assert response3.status_code == 200
+        
+        # Verify all signups
+        activities_data = client.get("/activities").json()
+        assert email in activities_data["Chess Club"]["participants"]
+        assert email in activities_data["Drama Club"]["participants"]
+        assert email in activities_data["Tennis Club"]["participants"]
+    
+    def test_all_activities_count(self, client):
+        """Test that all 10 activities are loaded"""
+        response = client.get("/activities")
+        data = response.json()
+        
+        # Should have 10 activities including Robotics Workshop
+        assert len(data) == 10
+        assert "Robotics Workshop" in data
+        assert "Chess Club" in data
+        assert "Science Club" in data
+    
+    def test_participant_preservation_after_failed_signup(self, client):
+        """Test that participants list is not modified after failed signup"""
+        email = "michael@mergington.edu"  # Already in Chess Club
+        
+        # Get initial participants
+        initial_data = client.get("/activities").json()
+        initial_participants = initial_data["Chess Club"]["participants"].copy()
+        
+        # Try duplicate signup (should fail)
+        response = client.post(f"/activities/Chess Club/signup?email={email}")
+        assert response.status_code == 400
+        
+        # Verify participants list unchanged
+        final_data = client.get("/activities").json()
+        final_participants = final_data["Chess Club"]["participants"]
+        assert final_participants == initial_participants
+
+
+class TestIntegrationWorkflows:
+    """Additional integration tests for complex workflows"""
+    
+    def test_student_journey_full_cycle(self, client):
+        """Test a complete student journey through the system"""
+        email = "newstudent@mergington.edu"
+        
+        # 1. Check available activities
+        all_activities = client.get("/activities").json()
+        assert len(all_activities) > 0
+        
+        # 2. Student has no activities initially
+        my_activities = client.get(f"/my-activities?email={email}").json()
+        assert len(my_activities) == 0
+        
+        # 3. Sign up for Chess Club
+        signup = client.post(f"/activities/Chess Club/signup?email={email}")
+        assert signup.status_code == 200
+        
+        # 4. Verify in my activities
+        my_activities = client.get(f"/my-activities?email={email}").json()
+        assert len(my_activities) == 1
+        assert "Chess Club" in my_activities
+        
+        # 5. Sign up for another activity
+        client.post(f"/activities/Drama Club/signup?email={email}")
+        
+        # 6. Should have 2 activities
+        my_activities = client.get(f"/my-activities?email={email}").json()
+        assert len(my_activities) == 2
+        
+        # 7. Remove from one activity
+        client.delete(f"/activities/Chess Club/participants/{email}")
+        
+        # 8. Should have 1 activity left
+        my_activities = client.get(f"/my-activities?email={email}").json()
+        assert len(my_activities) == 1
+        assert "Drama Club" in my_activities
+        assert "Chess Club" not in my_activities
+    
+    def test_activity_fills_and_empties(self, client):
+        """Test filling an activity to capacity and then emptying it"""
+        # Fill Robotics Workshop (has 4 participants, max 5)
+        client.post("/activities/Robotics Workshop/signup?email=fill1@mergington.edu")
+        
+        # Verify full
+        data = client.get("/activities").json()
+        assert len(data["Robotics Workshop"]["participants"]) == 5
+        
+        # Remove all participants
+        participants = data["Robotics Workshop"]["participants"].copy()
+        for email in participants:
+            client.delete(f"/activities/Robotics Workshop/participants/{email}")
+        
+        # Verify empty
+        data = client.get("/activities").json()
+        assert len(data["Robotics Workshop"]["participants"]) == 0
+        
+        # Can sign up again
+        response = client.post("/activities/Robotics Workshop/signup?email=newperson@mergington.edu")
+        assert response.status_code == 200
+

@@ -3,6 +3,49 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  let currentUserEmail = null; // Track the current user checking their activities
+
+  // Function to refresh my activities for the current user
+  async function refreshMyActivities() {
+    if (!currentUserEmail) return;
+    
+    const myActivitiesList = document.getElementById("my-activities-list");
+
+    try {
+      const response = await fetch(
+        `/my-activities?email=${encodeURIComponent(currentUserEmail)}`
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        const activityCount = Object.keys(result).length;
+        
+        if (activityCount === 0) {
+          myActivitiesList.innerHTML = `
+            <p class="no-activities">You are not registered for any activities yet.</p>
+          `;
+        } else {
+          myActivitiesList.innerHTML = `
+            <p class="activities-count">You are registered for ${activityCount} ${activityCount === 1 ? 'activity' : 'activities'}:</p>
+            <div class="my-activities-grid">
+              ${Object.entries(result).map(([name, details]) => `
+                <div class="my-activity-card">
+                  <h4>${name}</h4>
+                  <p>${details.description}</p>
+                  <p><strong>Schedule:</strong> ${details.schedule}</p>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+        
+        myActivitiesList.classList.remove("hidden");
+      }
+    } catch (error) {
+      console.error("Error refreshing my activities:", error);
+    }
+  }
 
   // Function to handle participant deletion
   async function handleDeleteParticipant(event) {
@@ -31,6 +74,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Refresh activities list
         await fetchActivities();
+
+        // Refresh my activities list if user has one displayed
+        await refreshMyActivities();
 
         // Hide message after 5 seconds
         setTimeout(() => {
@@ -173,6 +219,9 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Refresh activities list to show new participant
         await fetchActivities();
+
+        // Refresh my activities list if user has one displayed
+        await refreshMyActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
@@ -198,6 +247,7 @@ document.addEventListener("DOMContentLoaded", () => {
     event.preventDefault();
 
     const email = document.getElementById("check-email").value;
+    currentUserEmail = email; // Store the email for future refreshes
     const myActivitiesList = document.getElementById("my-activities-list");
 
     try {
